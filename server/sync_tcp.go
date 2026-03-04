@@ -1,73 +1,83 @@
 package server
 
 import (
-	"io"
+	"fmt"
 	"log"
 	"net"
-	"strconv"
 
 	"github.com/nahid12105080/cacheDB/config"
+	"github.com/nahid12105080/cacheDB/core"
 )
 
-func readCommand(c net.Conn) (string, error) {
-	buf := make([]byte, 1024)
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
 
-	n, err := c.Read(buf)
-	if err != nil {
-		return "", err
-	}
-
-	return string(buf[:n]), nil
-}
-
-func respond(cmd string, c net.Conn) error {
-	_, err := c.Write([]byte(cmd))
-	return err
-}
-
-func RunSyncTCPServer() {
-	log.Println("Synchronous TCP server running on", config.Host, config.Port)
-
-	lsnr, err := net.Listen("tcp", config.Host+":"+strconv.Itoa(config.Port))
-	if err != nil {
-		log.Fatal("Error listening:", err)
-	}
-	defer lsnr.Close()
-
-	var connectedClients int
+	buffer := make([]byte, 0)
 
 	for {
-		c, err := lsnr.Accept()
+		tmp := make([]byte, 1024)
+		n, err := conn.Read(tmp)
 		if err != nil {
-			log.Println("Error accepting connection:", err)
+			log.Println("Read error:", err)
+			return
+		}
+
+		buffer = append(buffer, tmp[:n]...)
+		log.Printf("BUFFER: %q\n", buffer)
+
+		for {
+			val, consumed, err := core.DecodeOne(buffer)
+			if err != nil {
+				log.Println("Decode error:", err)
+				break
+			}
+
+			log.Println("Decoded value:", val)
+
+			_, err = conn.Write(core.Encode("OK"))
+			if err != nil {
+				log.Println("Write error:", err)
+				return
+			}
+
+			buffer = buffer[consumed:]
+		}
+	}
+}
+
+// func readCommand(c net.Conn) (string, error) {
+// 	buf := make([]byte, 1024)
+
+// 	n, err := c.Read(buf)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	return string(buf[:n]), nil
+// }
+
+// func respond(cmd string, c net.Conn) error {
+// 	_, err := c.Write([]byte(cmd))
+// 	return err
+// }
+
+func RunSyncTCPServer() {
+	addr := config.Host + ":" + fmt.Sprint(config.Port)
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
+
+	log.Println("Listening on", addr)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
 			continue
 		}
 
-		connectedClients++
-		log.Println("New client connected:", c.RemoteAddr(),
-			" | Concurrent clients:", connectedClients)
-
-		// Handle client synchronously
-		for {
-			cmd, err := readCommand(c)
-			if err != nil {
-				if err == io.EOF {
-					log.Println("Client disconnected:", c.RemoteAddr())
-				} else {
-					log.Println("Read error:", err)
-				}
-				break
-			}
-
-			log.Println("Received:", cmd)
-
-			if err := respond(cmd, c); err != nil {
-				log.Println("Write error:", err)
-				break
-			}
-		}
-
-		connectedClients--
-		c.Close()
+		go handleConnection(conn)
 	}
 }
