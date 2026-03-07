@@ -4,28 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strings"
 
 	"github.com/nahid12105080/cacheDB/config"
 	"github.com/nahid12105080/cacheDB/core"
 )
-
-func ParseCommand(val interface{}) (*core.RedisCmd, error) {
-
-	arr, ok := val.([]string)
-	if !ok {
-		return nil, fmt.Errorf("invalid command format")
-	}
-
-	if len(arr) == 0 {
-		return nil, fmt.Errorf("empty command")
-	}
-
-	return &core.RedisCmd{
-		Cmd:  strings.ToUpper(arr[0]),
-		Args: arr[1:],
-	}, nil
-}
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
@@ -54,7 +36,7 @@ func handleConnection(conn net.Conn) {
 			log.Println("Decoded value:", val)
 
 			// convert RESP array → RedisCmd
-			cmd, err := ParseCommand(val)
+			cmd, err := core.ParseCommand(val)
 			if err != nil {
 				log.Println("Parse error:", err)
 				conn.Write(core.Encode("ERR invalid command", true))

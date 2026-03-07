@@ -7,7 +7,7 @@ import (
 
 func ParseCommand(val interface{}) (*RedisCmd, error) {
 
-	arr, ok := val.([]string)
+	arr, ok := val.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid command format")
 	}
@@ -16,8 +16,18 @@ func ParseCommand(val interface{}) (*RedisCmd, error) {
 		return nil, fmt.Errorf("empty command")
 	}
 
+	tokens := make([]string, len(arr))
+
+	for i, v := range arr {
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid argument type")
+		}
+		tokens[i] = s
+	}
+
 	return &RedisCmd{
-		Cmd:  strings.ToUpper(arr[0]),
-		Args: arr[1:],
+		Cmd:  strings.ToUpper(tokens[0]),
+		Args: tokens[1:],
 	}, nil
 }
