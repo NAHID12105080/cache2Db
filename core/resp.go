@@ -7,10 +7,7 @@ import (
 	"strconv"
 )
 
-// ============================
-// Public API
-// ============================
-
+// public api
 func DecodeOne(data []byte) (interface{}, int, error) {
 	if len(data) == 0 {
 		return nil, 0, errors.New("no data")
@@ -32,10 +29,7 @@ func DecodeOne(data []byte) (interface{}, int, error) {
 	}
 }
 
-// ============================
-// Helpers
-// ============================
-
+// will help to decode the data
 func readLine(data []byte) ([]byte, int, error) {
 	idx := bytes.Index(data, []byte("\r\n"))
 	if idx == -1 {
@@ -43,10 +37,6 @@ func readLine(data []byte) ([]byte, int, error) {
 	}
 	return data[:idx], idx + 2, nil
 }
-
-// ============================
-// Simple String
-// ============================
 
 func readSimpleString(data []byte) (interface{}, int, error) {
 	line, n, err := readLine(data[1:])
@@ -56,10 +46,6 @@ func readSimpleString(data []byte) (interface{}, int, error) {
 	return string(line), n + 1, nil
 }
 
-// ============================
-// Error
-// ============================
-
 func readError(data []byte) (interface{}, int, error) {
 	line, n, err := readLine(data[1:])
 	if err != nil {
@@ -67,10 +53,6 @@ func readError(data []byte) (interface{}, int, error) {
 	}
 	return errors.New(string(line)), n + 1, nil
 }
-
-// ============================
-// Integer
-// ============================
 
 func readInt(data []byte) (interface{}, int, error) {
 	line, n, err := readLine(data[1:])
@@ -86,10 +68,7 @@ func readInt(data []byte) (interface{}, int, error) {
 	return num, n + 1, nil
 }
 
-// ============================
-// Bulk String
-// ============================
-
+// handling bulk string
 func readBulkString(data []byte) (interface{}, int, error) {
 	line, n, err := readLine(data[1:])
 	if err != nil {
@@ -116,10 +95,7 @@ func readBulkString(data []byte) (interface{}, int, error) {
 	return string(data[start:end]), total, nil
 }
 
-// ============================
-// Array
-// ============================
-
+// for handling array
 func readArray(data []byte) (interface{}, int, error) {
 	line, n, err := readLine(data[1:])
 	if err != nil {
@@ -150,11 +126,8 @@ func readArray(data []byte) (interface{}, int, error) {
 	return result, totalConsumed, nil
 }
 
-// ============================
-// Encoder
-// ============================
-
-func Encode(value interface{}) []byte {
+// =====encoder part begins====
+func Encode(value interface{}, isError bool) []byte {
 	switch v := value.(type) {
 
 	case string:
@@ -179,7 +152,7 @@ func Encode(value interface{}) []byte {
 		var buf bytes.Buffer
 		buf.WriteString(fmt.Sprintf("*%d\r\n", len(v)))
 		for _, item := range v {
-			buf.Write(Encode(item))
+			buf.Write(Encode(item, false))
 		}
 		return buf.Bytes()
 

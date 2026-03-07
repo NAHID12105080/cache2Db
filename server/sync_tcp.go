@@ -4,10 +4,28 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/nahid12105080/cacheDB/config"
 	"github.com/nahid12105080/cacheDB/core"
 )
+
+func ParseCommand(val interface{}) (*core.RedisCmd, error) {
+
+	arr, ok := val.([]string)
+	if !ok {
+		return nil, fmt.Errorf("invalid command format")
+	}
+
+	if len(arr) == 0 {
+		return nil, fmt.Errorf("empty command")
+	}
+
+	return &core.RedisCmd{
+		Cmd:  strings.ToUpper(arr[0]),
+		Args: arr[1:],
+	}, nil
+}
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
@@ -16,6 +34,7 @@ func handleConnection(conn net.Conn) {
 
 	for {
 		tmp := make([]byte, 1024)
+
 		n, err := conn.Read(tmp)
 		if err != nil {
 			log.Println("Read error:", err)
@@ -28,38 +47,31 @@ func handleConnection(conn net.Conn) {
 		for {
 			val, consumed, err := core.DecodeOne(buffer)
 			if err != nil {
-				log.Println("Decode error:", err)
+				// usually means partial message
 				break
 			}
 
 			log.Println("Decoded value:", val)
 
-			_, err = conn.Write(core.Encode("OK"))
+			// convert RESP array → RedisCmd
+			cmd, err := ParseCommand(val)
 			if err != nil {
-				log.Println("Write error:", err)
-				return
+				log.Println("Parse error:", err)
+				conn.Write(core.Encode("ERR invalid command", true))
+				break
+			}
+
+			// execute command
+			err = core.EvalAndRespond(cmd, conn)
+			if err != nil {
+				log.Println("Eval error:", err)
+				conn.Write(core.Encode("ERR "+err.Error(), true))
 			}
 
 			buffer = buffer[consumed:]
 		}
 	}
 }
-
-// func readCommand(c net.Conn) (string, error) {
-// 	buf := make([]byte, 1024)
-
-// 	n, err := c.Read(buf)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	return string(buf[:n]), nil
-// }
-
-// func respond(cmd string, c net.Conn) error {
-// 	_, err := c.Write([]byte(cmd))
-// 	return err
-// }
 
 func RunSyncTCPServer() {
 	addr := config.Host + ":" + fmt.Sprint(config.Port)
@@ -75,6 +87,7 @@ func RunSyncTCPServer() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			log.Println("Accept error:", err)
 			continue
 		}
 
